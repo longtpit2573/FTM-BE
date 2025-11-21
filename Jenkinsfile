@@ -36,8 +36,6 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         // Timeout after 30 minutes
         timeout(time: 30, unit: 'MINUTES')
-        // Add timestamps to console output
-        timestamps()
     }
     
     stages {
@@ -213,40 +211,20 @@ pipeline {
     post {
         success {
             echo '✅ Pipeline completed successfully!'
-            // Send Slack notification
-            slackSend(
-                color: 'good',
-                message: """
-                    ✅ Backend Build SUCCESS
-                    Job: ${env.JOB_NAME}
-                    Build: ${env.BUILD_NUMBER}
-                    Image: ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-                    Commit: ${env.GIT_COMMIT_SHORT}
-                    Message: ${env.GIT_COMMIT_MSG}
-                """.stripIndent()
-            )
+            echo "Image: ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
         }
         failure {
             echo '❌ Pipeline failed!'
-            slackSend(
-                color: 'danger',
-                message: """
-                    ❌ Backend Build FAILED
-                    Job: ${env.JOB_NAME}
-                    Build: ${env.BUILD_NUMBER}
-                    Commit: ${env.GIT_COMMIT_SHORT}
-                    Check: ${env.BUILD_URL}
-                """.stripIndent()
-            )
+            echo "Check logs at: ${env.BUILD_URL}"
         }
         always {
-            // Clean up Docker images to save disk space
+            echo 'Cleaning up...'
+            // Clean up Docker images (if docker available)
             sh """
-                docker rmi ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} || true
-                docker rmi ${ACR_REGISTRY}/${IMAGE_NAME}:latest || true
+                command -v docker && docker rmi ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} || true
+                command -v docker && docker rmi ${ACR_REGISTRY}/${IMAGE_NAME}:latest || true
+                echo 'Cleanup complete'
             """
-            // Clean workspace
-            cleanWs()
         }
     }
 }
