@@ -50,6 +50,10 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
+
+// Use /api as base path for all routes
+app.UsePathBase("/api");
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
