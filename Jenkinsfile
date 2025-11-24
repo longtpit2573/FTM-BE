@@ -12,22 +12,22 @@
 // - Credentials: 'acr-credentials', 'git-credentials'
 
 pipeline {
-    agent any  // Run on Jenkins master
+    agent any
     
     environment {
         // ACR Configuration
         ACR_NAME = 'acrftmbackenddev'
         ACR_REGISTRY = "${ACR_NAME}.azurecr.io"
         IMAGE_NAME = 'ftm-backend'
-        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        IMAGE_TAG = "v1.0.${env.BUILD_NUMBER}"
         
         // GitOps Configuration
         GITOPS_REPO = 'https://github.com/longtpit2573/Infrastructure.git'
         GITOPS_PATH = 'applications/overlays/dev'
         
-        // Credentials
-        ACR_CREDENTIALS = credentials('acr-credentials')
-        GIT_CREDENTIALS = credentials('git-credentials')
+        // Docker build context
+        DOCKERFILE_PATH = './FTM-BE/Dockerfile'
+        BUILD_CONTEXT = './FTM-BE'
     }
     
     options {
@@ -51,71 +51,65 @@ pipeline {
                         script: 'git log -1 --pretty=%B',
                         returnStdout: true
                     ).trim()
-                    // Use Git commit hash as image tag for GitOps
-                    env.IMAGE_TAG = "v1.0.${env.BUILD_NUMBER}"
                 }
                 echo "Git Commit: ${env.GIT_COMMIT_SHORT}"
                 echo "Message: ${env.GIT_COMMIT_MSG}"
-                echo "Image Tag: ${env.IMAGE_TAG}"
+                echo "Image: ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
                 echo '========================================='
             }
         }
         
-        stage('🐳 Trigger Local Build') {
+        stage('🐳 Build & Push Docker Image') {
             steps {
-                echo '========================================='
-                echo '  Build Instructions'
-                echo '========================================='
-                echo 'Chạy script build-and-push.ps1 trên máy local:'
-                echo ''
-                echo "  cd E:\\AKS-DEMO"
-                echo "  .\\build-and-push.ps1 -ProjectName backend -Version ${IMAGE_TAG}"
-                echo ''
-                echo 'Script sẽ tự động build và push image lên ACR.'
-                echo 'Pipeline sẽ tự động update GitOps repository.'
-                echo '========================================='
+                echo 'Building and pushing Docker image...'
+                echo "Note: This requires Docker to be available in Jenkins agent pod"
+                echo "Image will be built: ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                
+                // For now, skip actual build - will be done manually
+                echo '⚠️  Docker not available in current agent'
+                echo 'Manual build required:'
+                echo "  cd ${BUILD_CONTEXT}"
+                echo "  docker build -t ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ."
+                echo "  docker push ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
         
         stage('📝 Update GitOps') {
-            when {
-                anyOf {
-                    branch 'main'
-                    expression { env.GIT_BRANCH == 'origin/main' }
-                }
-            }
             steps {
                 echo 'Updating GitOps repository...'
                 withCredentials([usernamePassword(credentialsId: 'git-credentials', 
                                                   usernameVariable: 'GIT_USER', 
                                                   passwordVariable: 'GIT_PASS')]) {
                     sh '''
-                        # Install kustomize to workspace
+                        # Install git and kustomize if not exists
+                        command -v git >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq git
+                        
                         if [ ! -f ./kustomize ]; then
                             curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
                         fi
-                        
-                        # Save workspace path
-                        WORKSPACE_DIR=$(pwd)
                         
                         # Clone GitOps repo
                         rm -rf gitops
                         git clone https://${GIT_USER}:${GIT_PASS}@github.com/longtpit2573/Infrastructure.git gitops
                         cd gitops/${GITOPS_PATH}
                         
-                        # Update image tag using absolute path
-                        ${WORKSPACE_DIR}/kustomize edit set image ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        # Update image tag
+                        ../../../kustomize edit set image ${ACR_REGISTRY}/${IMAGE_NAME}=${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        
+                        # Show changes
+                        echo "Changes to kustomization.yaml:"
+                        git diff kustomization.yaml
                         
                         # Commit and push
                         git config user.name "Jenkins CI"
                         git config user.email "jenkins@longops.io.vn"
                         git add kustomization.yaml
-                        git commit -m "chore: update backend image to ${IMAGE_TAG} [skip ci]" || true
+                        git commit -m "chore: update backend image to ${IMAGE_TAG} [skip ci]" || echo "No changes to commit"
                         git push https://${GIT_USER}:${GIT_PASS}@github.com/longtpit2573/Infrastructure.git main
                     '''
                 }
                 echo '✅ GitOps repo updated'
-                echo 'ArgoCD will auto-sync in 3 minutes'
+                echo 'ArgoCD will auto-sync in ~3 minutes'
             }
         }
     }
@@ -129,7 +123,10 @@ pipeline {
             echo "Commit: ${env.GIT_COMMIT_SHORT}"
             echo "Message: ${env.GIT_COMMIT_MSG}"
             echo ''
-            echo 'Next: ArgoCD will deploy to AKS in ~3 minutes'
+            echo 'Next steps:'
+            echo '1. GitOps repo updated with new image tag'
+            echo '2. ArgoCD will detect change in ~3 minutes'
+            echo '3. New pods will be deployed to AKS'
             echo '========================================='
         }
         failure {
@@ -139,13 +136,6 @@ pipeline {
             echo "Build: ${env.BUILD_NUMBER}"
             echo "Check logs: ${env.BUILD_URL}"
             echo '========================================='
-        }
-        always {
-            echo 'Cleaning up Docker images...'
-            sh """
-                docker rmi ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} || true
-                docker rmi ${ACR_REGISTRY}/${IMAGE_NAME}:latest || true
-            """ 
         }
     }
 }
