@@ -78,9 +78,6 @@ pipeline {
         }
         
         stage('📝 Update GitOps') {
-            when {
-                branch 'main'
-            }
             steps {
                 echo 'Updating GitOps repository...'
                 withCredentials([usernamePassword(credentialsId: 'git-credentials', 
