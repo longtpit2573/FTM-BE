@@ -78,6 +78,12 @@ pipeline {
         }
         
         stage('📝 Update GitOps') {
+            when {
+                anyOf {
+                    branch 'main'
+                    expression { env.GIT_BRANCH == 'origin/main' }
+                }
+            }
             steps {
                 echo 'Updating GitOps repository...'
                 withCredentials([usernamePassword(credentialsId: 'git-credentials', 
