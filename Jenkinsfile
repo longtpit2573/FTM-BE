@@ -94,15 +94,17 @@ pipeline {
                         if [ ! -f ./kustomize ]; then
                             curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
                         fi
-                        export PATH=$PWD:$PATH
+                        
+                        # Save workspace path
+                        WORKSPACE_DIR=$(pwd)
                         
                         # Clone GitOps repo
                         rm -rf gitops
                         git clone https://${GIT_USER}:${GIT_PASS}@github.com/longtpit2573/Infrastructure.git gitops
                         cd gitops/${GITOPS_PATH}
                         
-                        # Update image tag
-                        ../../kustomize edit set image ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        # Update image tag using absolute path
+                        ${WORKSPACE_DIR}/kustomize edit set image ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
                         
                         # Commit and push
                         git config user.name "Jenkins CI"
