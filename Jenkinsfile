@@ -51,25 +51,29 @@ pipeline {
                         script: 'git log -1 --pretty=%B',
                         returnStdout: true
                     ).trim()
+                    // Use Git commit hash as image tag for GitOps
+                    env.IMAGE_TAG = "v1.0.${env.BUILD_NUMBER}"
                 }
                 echo "Git Commit: ${env.GIT_COMMIT_SHORT}"
                 echo "Message: ${env.GIT_COMMIT_MSG}"
-                echo "Image: ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                echo "Image Tag: ${env.IMAGE_TAG}"
                 echo '========================================='
             }
         }
         
-        stage('🐳 Docker Build & Push') {
+        stage('🐳 Trigger Local Build') {
             steps {
-                echo 'Building and pushing Docker image...'
-                script {
-                    docker.withRegistry("https://${ACR_REGISTRY}", 'acr-credentials') {
-                        def customImage = docker.build("${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}", "./FTM-BE")
-                        customImage.push()
-                        customImage.push('latest')
-                    }
-                }
-                echo '✅ Images pushed to ACR'
+                echo '========================================='
+                echo '  Build Instructions'
+                echo '========================================='
+                echo 'Chạy script build-and-push.ps1 trên máy local:'
+                echo ''
+                echo "  cd E:\\AKS-DEMO"
+                echo "  .\\build-and-push.ps1 -ProjectName backend -Version ${IMAGE_TAG}"
+                echo ''
+                echo 'Script sẽ tự động build và push image lên ACR.'
+                echo 'Pipeline sẽ tự động update GitOps repository.'
+                echo '========================================='
             }
         }
         
