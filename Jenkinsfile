@@ -61,15 +61,8 @@ pipeline {
         
         stage('🐳 Build & Push Docker Image') {
             steps {
-                echo 'Building Docker image...'
+                echo "Building Docker image..."
                 script {
-                    // Check if docker is available
-                    def dockerAvailable = sh(script: 'command -v docker', returnStatus: true) == 0
-                    
-                    if (!dockerAvailable) {
-                        error "Docker is not available in Jenkins agent. Please install Docker or use docker-builder agent."
-                    }
-                    
                     dir('FTM-BE') {
                         sh """
                             # Build image
