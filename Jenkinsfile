@@ -89,12 +89,12 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'git-credentials', 
                                                   usernameVariable: 'GIT_USER', 
                                                   passwordVariable: 'GIT_PASS')]) {
-                    sh """
-                        # Install kustomize if not exists
-                        if ! command -v kustomize &> /dev/null; then
+                    sh '''
+                        # Install kustomize to workspace
+                        if [ ! -f ./kustomize ]; then
                             curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-                            mv kustomize /usr/local/bin/ || sudo mv kustomize /usr/local/bin/
                         fi
+                        export PATH=$PWD:$PATH
                         
                         # Clone GitOps repo
                         rm -rf gitops
@@ -102,7 +102,7 @@ pipeline {
                         cd gitops/${GITOPS_PATH}
                         
                         # Update image tag
-                        kustomize edit set image ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        ../../kustomize edit set image ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
                         
                         # Commit and push
                         git config user.name "Jenkins CI"
@@ -110,7 +110,7 @@ pipeline {
                         git add kustomization.yaml
                         git commit -m "chore: update backend image to ${IMAGE_TAG} [skip ci]" || true
                         git push https://${GIT_USER}:${GIT_PASS}@github.com/longtpit2573/Infrastructure.git main
-                    """
+                    '''
                 }
                 echo '✅ GitOps repo updated'
                 echo 'ArgoCD will auto-sync in 3 minutes'
