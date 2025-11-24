@@ -51,8 +51,8 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
 
-// Use /api as base path for all routes
-app.UsePathBase("/api");
+// PathBase is handled by Ingress, not needed here
+// app.UsePathBase("/api");
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -64,7 +64,8 @@ if (app.Environment.IsDevelopment())
 app.UseLoggerMiddleware();
 app.UseGlobalExceptionMiddleware();
 app.UseCors("AllowPorts");
-app.UseHttpsRedirection();
+// Disable HTTPS redirection in Kubernetes - Ingress handles TLS
+// app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseFTAuthorizationMiddleware();
