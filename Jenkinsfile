@@ -97,13 +97,9 @@ EOF
                         sh """
                             echo "Building and pushing image with Kaniko..."
                             echo "Image: ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-                            echo "Working directory: \$(pwd)"
-                            echo "Listing files:"
-                            ls -la
-                            
-                            # Kaniko needs absolute path or dir context
-                            cd FTM-BE
                             echo "Build context: \$(pwd)"
+                            
+                            # Verify Dockerfile exists
                             ls -la Dockerfile
                             
                             /kaniko/executor \\
