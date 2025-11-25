@@ -94,27 +94,32 @@ EOF
                         }
                         
                         // Build and push with Kaniko
-                        dir('FTM-BE') {
-                            sh """
-                                echo "Building and pushing image with Kaniko..."
-                                echo "Image: ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-                                echo "Context: \$(pwd)"
-                                
-                                /kaniko/executor \\
-                                  --context=. \\
-                                  --dockerfile=Dockerfile \\
-                                  --destination=${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \\
-                                  --destination=${ACR_REGISTRY}/${IMAGE_NAME}:latest \\
-                                  --cache=true \\
-                                  --cache-ttl=24h \\
-                                  --compressed-caching=false \\
-                                  --snapshot-mode=redo \\
-                                  --log-format=text \\
-                                  --verbosity=info
-                                
-                                echo "✅ Image built and pushed successfully with Kaniko"
-                            """
-                        }
+                        sh """
+                            echo "Building and pushing image with Kaniko..."
+                            echo "Image: ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                            echo "Working directory: \$(pwd)"
+                            echo "Listing files:"
+                            ls -la
+                            
+                            # Kaniko needs absolute path or dir context
+                            cd FTM-BE
+                            echo "Build context: \$(pwd)"
+                            ls -la Dockerfile
+                            
+                            /kaniko/executor \\
+                              --context=\$(pwd) \\
+                              --dockerfile=\$(pwd)/Dockerfile \\
+                              --destination=${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \\
+                              --destination=${ACR_REGISTRY}/${IMAGE_NAME}:latest \\
+                              --cache=true \\
+                              --cache-ttl=24h \\
+                              --compressed-caching=false \\
+                              --snapshot-mode=redo \\
+                              --log-format=text \\
+                              --verbosity=info
+                            
+                            echo "✅ Image built and pushed successfully with Kaniko"
+                        """
                     }
                 }
             }
