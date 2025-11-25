@@ -79,17 +79,21 @@ pipeline {
                                 # Create Docker config.json for Kaniko
                                 mkdir -p /kaniko/.docker
                                 
+                                # Encode credentials properly (base64 without newlines)
+                                AUTH=\$(printf "%s:%s" "\${ACR_USER}" "\${ACR_PASS}" | base64 -w 0)
+                                
                                 cat > /kaniko/.docker/config.json <<EOF
 {
   "auths": {
     "${ACR_REGISTRY}": {
-      "auth": "\$(echo -n "\${ACR_USER}:\${ACR_PASS}" | base64)"
+      "auth": "\${AUTH}"
     }
   }
 }
 EOF
                                 
                                 echo "Docker config created successfully"
+                                cat /kaniko/.docker/config.json
                             """
                         }
                         
