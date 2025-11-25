@@ -61,68 +61,60 @@ pipeline {
             }
         }
         
-        stage('🐳 Build & Push Docker Image') {
+        stage('🐳 Build & Push with Kaniko') {
             steps {
-                container('docker') {
+                container('kaniko') {
                     script {
-                        echo 'Building Docker image...'
+                        echo 'Building image with Kaniko...'
                         
-                        // Wait for Docker daemon to be ready
-                        sh '''
-                            echo "Waiting for Docker daemon..."
-                            for i in {1..30}; do
-                                if docker info > /dev/null 2>&1; then
-                                    echo "✅ Docker daemon is ready!"
-                                    break
-                                fi
-                                echo "Waiting for Docker daemon to start (attempt $i/30)..."
-                                sleep 2
-                            done
-                            
-                            # Verify Docker is working
-                            docker version
-                        '''
-                        
-                        // Build in FTM-BE directory
-                        dir('FTM-BE') {
-                            sh """
-                                echo "Building image: ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-                                
-                                # Build image
-                                docker build -t ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} .
-                                
-                                # Tag as latest
-                                docker tag ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ${ACR_REGISTRY}/${IMAGE_NAME}:latest
-                                
-                                echo "✅ Docker image built successfully"
-                            """
-                        }
-                        
-                        echo 'Pushing to ACR...'
+                        // Get ACR credentials and create Docker config
                         withCredentials([usernamePassword(
                             credentialsId: 'acr-credentials',
                             usernameVariable: 'ACR_USER',
                             passwordVariable: 'ACR_PASS'
                         )]) {
                             sh """
-                                echo "Logging into ACR..."
-                                echo \${ACR_PASS} | docker login ${ACR_REGISTRY} --username \${ACR_USER} --password-stdin
+                                echo "Creating Docker config for ACR authentication..."
                                 
-                                echo "Pushing ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}..."
-                                docker push ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                                # Create Docker config.json for Kaniko
+                                mkdir -p /kaniko/.docker
                                 
-                                echo "Pushing ${ACR_REGISTRY}/${IMAGE_NAME}:latest..."
-                                docker push ${ACR_REGISTRY}/${IMAGE_NAME}:latest
+                                cat > /kaniko/.docker/config.json <<EOF
+{
+  "auths": {
+    "${ACR_REGISTRY}": {
+      "auth": "\$(echo -n "\${ACR_USER}:\${ACR_PASS}" | base64)"
+    }
+  }
+}
+EOF
                                 
-                                echo "✅ Image pushed successfully to ACR"
+                                echo "Docker config created successfully"
                             """
                         }
                         
-                        // Clean up local images to save space
-                        sh """
-                            docker rmi ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} || true
-                            docker rmi ${ACR_REGISTRY}/${IMAGE_NAME}:latest || true
-                        """
+                        // Build and push with Kaniko
+                        dir('FTM-BE') {
+                            sh """
+                                echo "Building and pushing image with Kaniko..."
+                                echo "Image: ${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                                echo "Context: \$(pwd)"
+                                
+                                /kaniko/executor \\
+                                  --context=. \\
+                                  --dockerfile=Dockerfile \\
+                                  --destination=${ACR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \\
+                                  --destination=${ACR_REGISTRY}/${IMAGE_NAME}:latest \\
+                                  --cache=true \\
+                                  --cache-ttl=24h \\
+                                  --compressed-caching=false \\
+                                  --snapshot-mode=redo \\
+                                  --log-format=text \\
+                                  --verbosity=info
+                                
+                                echo "✅ Image built and pushed successfully with Kaniko"
+                            """
+                        }
                     }
                 }
             }
