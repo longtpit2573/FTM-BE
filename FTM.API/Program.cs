@@ -48,39 +48,6 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppIdentityDbContext>("IdentityDb")
     .AddDbContextCheck<FTMDbContext>("FTMDb");
 
-// OpenTelemetry Tracing
-builder.Services.AddOpenTelemetry()
-    .WithTracing(tracerProviderBuilder =>
-    {
-        tracerProviderBuilder
-            .SetResourceBuilder(OpenTelemetry.Resources.ResourceBuilder
-                .CreateDefault()
-                .AddService("ftm-backend"))
-            .AddAspNetCoreInstrumentation(options =>
-            {
-                options.RecordException = true;
-                options.Filter = (httpContext) => 
-                {
-                    // Don't trace health checks and metrics endpoints
-                    return !httpContext.Request.Path.StartsWithSegments("/health") &&
-                           !httpContext.Request.Path.StartsWithSegments("/metrics");
-                };
-            })
-            .AddHttpClientInstrumentation()
-            .AddSqlClientInstrumentation(options =>
-            {
-                options.SetDbStatementForText = true;
-                options.RecordException = true;
-            })
-            .AddOtlpExporter(otlpOptions =>
-            {
-                // Export to Tempo via OTLP gRPC
-                var tempoEndpoint = builder.Configuration["OpenTelemetry:Endpoint"] 
-                    ?? "http://tempo.monitoring.svc.cluster.local:4317";
-                otlpOptions.Endpoint = new Uri(tempoEndpoint);
-                otlpOptions.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
-            });
-    });
 
 var app = builder.Build();
 Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
@@ -104,15 +71,12 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseFTAuthorizationMiddleware();
 
-// Prometheus Metrics - expose /metrics endpoint
+
 app.UseRouting();
-app.UseHttpMetrics();  // Track HTTP request metrics automatically
 
 // Map Health Check endpoint
 app.MapHealthChecks("/health");
 
-// Prometheus Metrics endpoint
-app.MapMetrics();  // Expose /metrics for Prometheus scraping
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notification");
